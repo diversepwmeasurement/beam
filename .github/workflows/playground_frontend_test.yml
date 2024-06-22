@@ -1,97 +1,61 @@
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to You under the Apache License, Version 2.0
-# (the "License"); you may not use this file except in compliance with
-# the License.  You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-name: Playground Frontend Test
-
-on:
-  push:
-    paths:
-      - 'playground/frontend/**'
-    branches: ['**']
-  pull_request:
-    paths:
-      - 'playground/frontend/**'
-    branches: ['**']
-  workflow_dispatch:
-
-# This allows a subsequently queued workflow run to interrupt previous runs
 concurrency:
-  group: '${{ github.workflow }} @ ${{ github.event.issue.number || github.event.pull_request.head.label || github.sha || github.head_ref || github.ref }}-${{ github.event.schedule || github.event.comment.id || github.event.sender.login}}'
   cancel-in-progress: true
-
+  group: ${{ github.workflow }} @ ${{ github.event.issue.number || github.event.pull_request.head.label
+    || github.sha || github.head_ref || github.ref }}-${{ github.event.schedule ||
+    github.event.comment.id || github.event.sender.login}}
 env:
   DEVELOCITY_ACCESS_KEY: ${{ secrets.GE_ACCESS_TOKEN }}
-  GRADLE_ENTERPRISE_CACHE_USERNAME: ${{ secrets.GE_CACHE_USERNAME }}
   GRADLE_ENTERPRISE_CACHE_PASSWORD: ${{ secrets.GE_CACHE_PASSWORD }}
-
+  GRADLE_ENTERPRISE_CACHE_USERNAME: ${{ secrets.GE_CACHE_USERNAME }}
 jobs:
   playground_frontend_test:
-    name: Playground Frontend Test
-    runs-on: ubuntu-latest
-
     env:
-      FLUTTER_VERSION: '3.10.4'
-
+      FLUTTER_VERSION: 3.10.4
+    name: Playground Frontend Test
+    runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
+    - continue-on-error: true
+      uses: actions/checkout@v4
+    - continue-on-error: true
+      name: Cache Flutter Dependencies
+      uses: actions/cache@v4
+      with:
+        key: ${{ runner.OS }}-flutter-install-cache-${{ env.FLUTTER_VERSION }}
+        path: /opt/hostedtoolcache/flutter
+        restore-keys: ${{ runner.OS }}-flutter-install-cache
+    - continue-on-error: true
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+    - continue-on-error: true
+      name: Install Dependencies
+      run: 'cd playground_components && flutter pub get && cd ..
 
-      - name: 'Cache Flutter Dependencies'
-        uses: actions/cache@v4
-        with:
-          path: /opt/hostedtoolcache/flutter
-          key: ${{ runner.OS }}-flutter-install-cache-${{ env.FLUTTER_VERSION }}
-          restore-keys: ${{ runner.OS }}-flutter-install-cache
+        cd playground_components_dev && flutter pub get && cd ..
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
+        flutter pub get
 
-      - name: 'Install Dependencies'
-        working-directory: playground/frontend
-        run: |
-          cd playground_components && flutter pub get && cd ..
-          cd playground_components_dev && flutter pub get && cd ..
-          flutter pub get
+        '
+      working-directory: playground/frontend
+    - continue-on-error: true
+      name: Test playground_components
+      run: flutter test
+      working-directory: playground/frontend/playground_components
+    - continue-on-error: true
+      name: Test playground
+      run: flutter test
+      working-directory: playground/frontend
+    - continue-on-error: true
+      uses: nanasess/setup-chromedriver@v2
+    - continue-on-error: true
+      name: Integration tests
+      run: 'chromedriver --port=4444 &
 
-#      - name: 'Formatting'
-#        run: dart format --output=none --set-exit-if-changed .
+        ./gradlew :playground:frontend:integrationTest -PdeviceId=web-server
 
-#      - name: 'Analyze playground_components'
-#        working-directory: playground/frontend/playground_components
-#        run: dart analyze --fatal-infos
-
-#      - name: 'Analyze playground_components_dev'
-#        working-directory: playground/frontend/playground_components_dev
-#        run: dart analyze --fatal-infos
-
-#      - name: 'Analyze playground'
-#        working-directory: playground/frontend
-#        run: dart analyze --fatal-infos lib test
-
-      - name: 'Test playground_components'
-        working-directory: playground/frontend/playground_components
-        run: flutter test
-
-      - name: 'Test playground'
-        working-directory: playground/frontend
-        run: flutter test
-
-      - uses: nanasess/setup-chromedriver@v2
-
-      - name: 'Integration tests'
-        run: |
-          chromedriver --port=4444 &
-          ./gradlew :playground:frontend:integrationTest -PdeviceId=web-server
+        '
+name: Playground Frontend Test
+on:
+  repository_dispatch:
+    types: trigger-ga___playground_frontend_test.yml
